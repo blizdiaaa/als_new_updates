@@ -1,18 +1,11 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, onValue, set, off } from 'firebase/database';
-import { GameUpdate, StorageData } from './types';
+import React, { useState, useEffect } from 'react';
+import { GameUpdate, Unit, StorageData, ContentItem } from './types';
 import TabSystem from './components/TabSystem';
 import UpdateContent from './components/UpdateContent';
 
-const FIREBASE_CONFIG = {
-  databaseURL: "https://als-update-log-copy-default-rtdb.firebaseio.com/"
-};
-
+const STORAGE_KEY = 'als_update_wiki_v1';
 const ADMIN_PASSWORD = 'nova';
-const app = initializeApp(FIREBASE_CONFIG);
-const db = getDatabase(app);
 
 const createDefaultUpdate = (id: string, name: string): GameUpdate => ({
   id,
@@ -33,48 +26,37 @@ const App: React.FC = () => {
   const [showPassModal, setShowPassModal] = useState(false);
   const [passInput, setPassInput] = useState('');
   const [passError, setPassError] = useState(false);
-  
-  // To avoid circular updates (Firebase -> State -> Firebase)
-  const isSyncingFromFirebase = useRef(false);
 
-  // 1. Initial Load & Firebase Subscription
   useEffect(() => {
-    const updatesRef = ref(db, 'updates');
-    
-    const unsubscribe = onValue(updatesRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        isSyncingFromFirebase.current = true;
-        setUpdates(data);
-        if (!activeUpdateId && data.length > 0) {
-          setActiveUpdateId(data[0].id);
-        }
-        isSyncingFromFirebase.current = false;
-      } else {
-        // Initialize if DB is empty
-        const initial = createDefaultUpdate('1', 'Update v1.0');
-        setUpdates([initial]);
-        setActiveUpdateId(initial.id);
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed: StorageData = JSON.parse(saved);
+        setUpdates(parsed.updates || []);
+        setActiveUpdateId(parsed.activeUpdateId || '');
+        setIsAdmin(parsed.isAdmin || false);
+      } catch (e) {
+        console.error("Failed to load data", e);
+        resetState();
       }
-      setIsInitialized(true);
-    });
-
-    return () => off(updatesRef);
+    } else {
+      resetState();
+    }
+    setIsInitialized(true);
   }, []);
 
-  // 2. Admin Global Sync (Debounced Write to Firebase)
+  const resetState = () => {
+    const initialUpdate = createDefaultUpdate('1', 'Update v1.0');
+    setUpdates([initialUpdate]);
+    setActiveUpdateId(initialUpdate.id);
+  };
+
   useEffect(() => {
-    if (!isAdmin || isSyncingFromFirebase.current || !isInitialized) return;
-
-    const timeout = setTimeout(() => {
-      const updatesRef = ref(db, 'updates');
-      set(updatesRef, updates).catch(err => {
-        console.error("Firebase Sync Error:", err);
-      });
-    }, 500); // 500ms debounce
-
-    return () => clearTimeout(timeout);
-  }, [updates, isAdmin, isInitialized]);
+    if (isInitialized) {
+      const data: StorageData = { updates, activeUpdateId, isAdmin };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+  }, [updates, activeUpdateId, isAdmin, isInitialized]);
 
   const toggleAdmin = () => {
     if (isAdmin) {
@@ -98,14 +80,7 @@ const App: React.FC = () => {
 
   const activeUpdate = updates.find(u => u.id === activeUpdateId);
 
-  if (!isInitialized) return (
-    <div className="min-h-screen flex items-center justify-center bg-[#080202]">
-      <div className="flex flex-col items-center gap-4">
-        <div className="w-12 h-12 border-4 border-red-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-red-500 font-black uppercase tracking-[0.3em] text-[10px] animate-pulse">Initializing Wiki Connection...</p>
-      </div>
-    </div>
-  );
+  if (!isInitialized) return null;
 
   return (
     <div className="min-h-screen pb-24">
@@ -116,7 +91,7 @@ const App: React.FC = () => {
           </div>
           <div>
             <h1 className="text-lg font-bold tracking-tight">ALS <span className="text-red-500">UPDATE WIKI</span></h1>
-            <p className="text-[10px] text-red-900/60 uppercase tracking-widest font-black">Global Synchronized Database</p>
+            <p className="text-[10px] text-red-900/60 uppercase tracking-widest font-black">Official Database</p>
           </div>
         </div>
 
@@ -142,7 +117,7 @@ const App: React.FC = () => {
           onAdd={() => {
             const newId = Date.now().toString();
             const newUpdate = createDefaultUpdate(newId, `Update ${updates.length + 1}`);
-            setUpdates(prev => [...prev, newUpdate]);
+            setUpdates([...updates, newUpdate]);
             setActiveUpdateId(newId);
           }}
           onRename={(id, name) => setUpdates(prev => prev.map(u => u.id === id ? { ...u, name } : u))}
@@ -172,7 +147,7 @@ const App: React.FC = () => {
       {showPassModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/90 backdrop-blur-md">
           <div className="glass w-full max-w-sm rounded-[2.5rem] p-10 animate-fade-in border border-red-500/20">
-            <h3 className="text-2xl font-black mb-2 uppercase tracking-tighter text-white">Security Protocol</h3>
+            <h3 className="text-2xl font-black mb-2 uppercase tracking-tighter">Security Protocol</h3>
             <p className="text-slate-500 text-sm mb-8">Verification required for administrative modification.</p>
             <form onSubmit={handlePasswordSubmit} className="space-y-4">
               <input 
@@ -181,13 +156,13 @@ const App: React.FC = () => {
                 placeholder="Code Name"
                 value={passInput}
                 onChange={(e) => setPassInput(e.target.value)}
-                className={`w-full bg-white/5 border rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-red-500 text-center font-bold text-white ${passError ? 'border-red-500 animate-pulse' : 'border-white/10'}`}
+                className={`w-full bg-white/5 border rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-red-500 text-center font-bold ${passError ? 'border-red-500 animate-pulse' : 'border-white/10'}`}
               />
               <div className="flex gap-4">
                 <button 
                   type="button" 
                   onClick={() => { setShowPassModal(false); setPassError(false); setPassInput(''); }}
-                  className="flex-1 px-4 py-4 rounded-2xl bg-white/5 hover:bg-white/10 font-bold text-sm transition-all text-slate-300"
+                  className="flex-1 px-4 py-4 rounded-2xl bg-white/5 hover:bg-white/10 font-bold text-sm transition-all"
                 >
                   Abort
                 </button>
