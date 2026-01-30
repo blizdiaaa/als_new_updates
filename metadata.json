@@ -1,0 +1,5 @@
+{
+  "name": "Nova Game Update Manager",
+  "description": "A sleek, modern dashboard for game developers to organize and preview game updates, featuring unit management, content planning, and balance changes with full persistence.",
+  "requestFramePermissions": []
+}
