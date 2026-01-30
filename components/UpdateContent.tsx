@@ -595,7 +595,7 @@ const UpdateContent: React.FC<UpdateContentProps> = ({ update, isAdmin, onChange
                    className="w-full bg-red-950/20 border border-red-500/20 rounded-xl px-4 py-3 text-[10px] font-black text-red-400 uppercase tracking-widest outline-none focus:border-red-500/50"
                  >
                    <option value="scanner">AI Screenshot Scanner</option>
-                   <option value="text">Update Log (Text)</option>
+                   <option value="text">Update Log (Text Parser)</option>
                    <option value="formatter">Data Exporter</option>
                  </select>
               </div>
@@ -621,7 +621,7 @@ const UpdateContent: React.FC<UpdateContentProps> = ({ update, isAdmin, onChange
               {adminToolMode === 'text' && (
                 <div className="space-y-4">
                    <p className="text-slate-400 text-[10px] font-medium leading-relaxed">
-                     Paste raw patch notes. Neural processor will split data into Wiki-ready entries.
+                     Paste raw patch notes. Neural processor will split data into structured global wiki entries.
                    </p>
                    <textarea 
                      value={rawLogInput}
